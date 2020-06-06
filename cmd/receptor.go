@@ -47,12 +47,25 @@ func (cfg nullBackendCfg) Run() error {
 	return nil
 }
 
-func main() {
+func initCmdline() {
 	cmdline.AddConfigType("node-id", "Network node ID of this instance", nodeIDCfg{}, true, nil)
 	cmdline.AddConfigType("debug", "Enables debug output", debugCfg{}, false, nil)
 	cmdline.AddConfigType("trace", "Enables packet tracing output", traceCfg{}, false, nil)
 	cmdline.AddConfigType("local-only", "Run a self-contained node with no backends", nullBackendCfg{}, false, nil)
-	cmdline.ParseAndRun(os.Args[1:])
+}
+
+func runCmdline(args []string) error {
+	return cmdline.ParseAndRun(args)
+}
+
+func main() {
+	initCmdline()
+	err := runCmdline(os.Args[1:])
+
+	if err != nil {
+		fmt.Printf("%s", err)
+		os.Exit(1)
+	}
 
 	if nodeID == "" {
 		println("Must specify a node ID")

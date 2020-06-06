@@ -1,6 +1,7 @@
 package cmdline
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -237,7 +238,7 @@ func convTagToBool(tag string, def bool) bool {
 }
 
 // ParseAndRun parses the command line configuration and runs the selected actions.
-func ParseAndRun(args []string) {
+func ParseAndRun(args []string) error {
 	var accumulator reflect.Value
 	var accumArg string
 	var commandType reflect.Type
@@ -252,12 +253,14 @@ func ParseAndRun(args []string) {
 		}
 	}
 
-	checkRequiredParams := func() {
-		if len(requiredParams) > 0 {
-			fmt.Printf("Required parameter%s missing for %s: %s\n", plural(len(requiredParams), "", "s"),
-				accumArg, strings.ToLower(joinMapKeys(requiredParams, ", ")))
-			os.Exit(1)
+	checkRequiredParams := func() error {
+		if len(requiredParams) <= 0 {
+			return nil
 		}
+		return fmt.Errorf("Required parameter%s missing for %s: %s\n",
+			plural(len(requiredParams), "", "s"),
+			accumArg,
+			strings.ToLower(joinMapKeys(requiredParams, ", ")))
 	}
 
 	for i := range args {
@@ -265,10 +268,10 @@ func ParseAndRun(args []string) {
 		lcarg := strings.ToLower(arg)
 		if lcarg == "-h" || lcarg == "--help" {
 			ShowHelp()
-			os.Exit(0)
+			return nil
 		} else if lcarg == "--bash-completion" {
 			bashCompletion()
-			os.Exit(0)
+			return nil
 		} else if lcarg[0] == '-' {
 			// This is a param with dashes, which starts a new action
 			for lcarg[0] == '-' {
@@ -276,7 +279,10 @@ func ParseAndRun(args []string) {
 			}
 			// If we were accumulating an action, store it (it is now complete)
 			if commandType != nil {
-				checkRequiredParams()
+				err := checkRequiredParams()
+				if err != nil {
+					return err
+				}
 				activeObjs = append(activeObjs, accumulator)
 			}
 			// Search for the command in our known config types, and start a new accumulator
@@ -300,14 +306,12 @@ func ParseAndRun(args []string) {
 				}
 			}
 			if !found {
-				fmt.Printf("Unknown command: %s\n", arg)
-				os.Exit(1)
+				return fmt.Errorf("Unknown command: %s\n", arg)
 			}
 		} else {
 			// This arg did not start with a dash, so it is a parameter to the current accumulation
 			if commandType == nil {
-				fmt.Printf("Parameter specified before command\n")
-				os.Exit(1)
+				return errors.New("Parameter specified before command\n")
 			}
 			sarg := strings.SplitN(arg, "=", 2)
 			if len(sarg) == 1 {
@@ -327,8 +331,7 @@ func ParseAndRun(args []string) {
 					}
 				}
 				if !found {
-					fmt.Printf("Unknown parameter %s\n", sarg[0])
-					os.Exit(1)
+					return fmt.Errorf("Unknown parameter %s\n", sarg[0])
 				}
 			} else if len(sarg) == 2 {
 				// This is a key/value pair, so look for a parameter matching the key
@@ -348,25 +351,28 @@ func ParseAndRun(args []string) {
 					}
 				}
 				if !found {
-					fmt.Printf("Unknown parameter %s\n", sarg[0])
-					os.Exit(1)
+					return fmt.Errorf("Unknown parameter %s\n", sarg[0])
 				}
 			}
 		}
 	}
 	if commandType != nil {
 		// If we were accumulating an object, store it now since we're done
-		checkRequiredParams()
+		err := checkRequiredParams()
+		if err != nil {
+			return err
+		}
 		activeObjs = append(activeObjs, accumulator)
 	}
 
 	if len(requiredObjs) > 0 {
-		fmt.Printf("%s required for: %s\n", plural(len(requiredObjs), "A value is", "Values are"),
+		msg := fmt.Sprintf("%s required for: %s\n",
+			plural(len(requiredObjs), "A value is", "Values are"),
 			joinMapKeys(requiredObjs, ", "))
 		if len(args) == 0 {
-			fmt.Printf("Run %s --help for command line instructions.\n", os.Args[0])
+			msg += fmt.Sprintf("Run %s --help for command line instructions.\n", os.Args[0])
 		}
-		os.Exit(1)
+		return errors.New(msg)
 	}
 
 	// Set default values where required
@@ -404,7 +410,7 @@ func ParseAndRun(args []string) {
 	}
 
 	// Run a given named method on all the registered objects
-	runMethod := func(methodName string) {
+	runMethod := func(methodName string) error {
 		for i := range activeObjs {
 			cfgobj := activeObjs[i]
 			m := cfgobj.MethodByName(methodName)
@@ -412,11 +418,11 @@ func ParseAndRun(args []string) {
 				result := m.Call(make([]reflect.Value, 0))
 				err := result[0].Interface()
 				if err != nil {
-					fmt.Printf("Error: %s\n", err)
-					os.Exit(1)
+					return fmt.Errorf("Error: %s\n", err)
 				}
 			}
 		}
+		return nil
 	}
 
 	// Run phases
@@ -427,5 +433,10 @@ func ParseAndRun(args []string) {
 	runMethod("Prepare")
 
 	// Run implementations can assume that everyone else's Prepare has already run.
-	runMethod("Run")
+	err := runMethod("Run")
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
