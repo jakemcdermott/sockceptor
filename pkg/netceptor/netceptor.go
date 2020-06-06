@@ -288,7 +288,7 @@ func (s *Netceptor) removeLocalServiceAdvertisement(service string) error {
 
 // Send a single service broadcast
 func (s *Netceptor) sendServiceAd(si *ServiceAdvertisement) error {
-	debug.Printf("Sending service advertisement: %s\n", si)
+	debug.Printf("Sending service advertisement: %s %s\n", si.NodeID, si.Service)
 	sf := serviceAdvertisementFull{
 		ServiceAdvertisement: si,
 		Cancel:               false,
@@ -746,7 +746,7 @@ func (s *Netceptor) handleServiceAdvertisement(data []byte, receivedFrom string)
 	if err != nil {
 		return err
 	}
-	debug.Printf("Received service advertisement %s\n", si)
+	debug.Printf("Received service advertisement %s %s\n", si.NodeID, si.Service)
 	s.serviceAdsLock.Lock()
 	defer s.serviceAdsLock.Unlock()
 	n, ok := s.serviceAdsReceived[si.NodeID]

@@ -28,7 +28,7 @@ func bridgeHalf(c1 net.Conn, c2 net.Conn) {
 			return
 		}
 		if wn != n {
-			debug.Printf("Not all bytes written\n", err)
+			debug.Printf("Not all bytes written\n")
 			return
 		}
 	}
@@ -97,7 +97,8 @@ type TCPProxyInboundCfg struct {
 
 // Run runs the action
 func (cfg TCPProxyInboundCfg) Run() error {
-	debug.Printf("Running TCP inbound proxy service %s\n", cfg)
+	debug.Printf("Running TCP inbound proxy service Port: %d, BindAddr: %s, RemoteNode: %s, RemoteService: %s\n",
+		cfg.Port, cfg.BindAddr, cfg.RemoteNode, cfg.RemoteService)
 	go TCPProxyServiceInbound(netceptor.MainInstance, cfg.BindAddr, cfg.Port, cfg.RemoteNode, cfg.RemoteService)
 	return nil
 }
